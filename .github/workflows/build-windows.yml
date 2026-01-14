@@ -58,6 +58,23 @@ jobs:
       - name: Build rustdesk
         run: |
           python3 .\build.py --flutter --skip-portable-pack
+        shell: pwsh
+
+      - name: List build output
+        if: always()
+        run: |
+          echo "=== Checking build output ==="
+          if (Test-Path "./flutter/build/windows/x64/runner/Release") {
+            Get-ChildItem -Path "./flutter/build/windows/x64/runner/Release" -Recurse
+          } else {
+            echo "Release folder not found"
+            echo "=== Checking flutter/build ==="
+            Get-ChildItem -Path "./flutter/build" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 50
+          }
+        shell: pwsh
+
+      - name: Move build output
+        run: |
           mv ./flutter/build/windows/x64/runner/Release ./rustdesk
         shell: pwsh
 

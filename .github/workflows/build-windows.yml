@@ -60,16 +60,27 @@ jobs:
           python3 .\build.py --flutter --skip-portable-pack
         shell: pwsh
 
-      - name: List build output
-        if: always()
+      - name: Add admin manifest
         run: |
-          echo "=== Checking build output ==="
-          if (Test-Path "./flutter/build/windows/x64/runner/Release") {
-            Get-ChildItem -Path "./flutter/build/windows/x64/runner/Release" -Recurse
+          $manifest = @"
+          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+            <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+              <security>
+                <requestedPrivileges>
+                  <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+                </requestedPrivileges>
+              </security>
+            </trustInfo>
+          </assembly>
+          "@
+          $manifest | Out-File -FilePath "admin.manifest" -Encoding UTF8
+          $exePath = "./flutter/build/windows/x64/runner/Release/rustdesk.exe"
+          if (Test-Path $exePath) {
+            mt.exe -manifest admin.manifest -outputresource:"$exePath;#1"
+            echo "Admin manifest added successfully"
           } else {
-            echo "Release folder not found"
-            echo "=== Checking flutter/build ==="
-            Get-ChildItem -Path "./flutter/build" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 50
+            echo "EXE not found at $exePath"
           }
         shell: pwsh
 

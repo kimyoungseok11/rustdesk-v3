@@ -76,9 +76,17 @@ jobs:
           "@
           $manifest | Out-File -FilePath "admin.manifest" -Encoding UTF8
           $exePath = "./flutter/build/windows/x64/runner/Release/rustdesk.exe"
+
+          # Find mt.exe in Windows SDK
+          $mtPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "mt.exe" | Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1 -ExpandProperty FullName
+
           if (Test-Path $exePath) {
-            mt.exe -manifest admin.manifest -outputresource:"$exePath;#1"
-            echo "Admin manifest added successfully"
+            if ($mtPath) {
+              & $mtPath -manifest admin.manifest -outputresource:"$exePath;#1"
+              echo "Admin manifest added successfully using $mtPath"
+            } else {
+              echo "mt.exe not found"
+            }
           } else {
             echo "EXE not found at $exePath"
           }

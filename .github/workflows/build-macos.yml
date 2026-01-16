@@ -24,31 +24,7 @@ jobs:
               run: |
                   brew install cmake pkg-config nasm yasm
 
-            - name: Install vcpkg
-              run: |
-                  cd /Users/runner
-                  git clone https://github.com/microsoft/vcpkg
-                  cd vcpkg
-                  ./bootstrap-vcpkg.sh
-                  echo "VCPKG_ROOT=/Users/runner/vcpkg" >> $GITHUB_ENV
-
-            - name: Cache vcpkg
-              uses: actions/cache@v3
-              with:
-                  path: |
-                      /Users/runner/vcpkg
-                      vcpkg_installed
-                  key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-vcpkg-
-
-            - name: Install vcpkg dependencies
-              run: |
-                  export VCPKG_ROOT=/Users/runner/vcpkg
-                  cd ${{ github.workspace }}
-                  $VCPKG_ROOT/vcpkg install --clean-after-build
-
-            - name: Detect architecture and set paths
+            - name: Detect architecture
               id: arch
               run: |
                   ARCH=$(uname -m)
@@ -64,18 +40,45 @@ jobs:
                   fi
                   echo "vcpkg_triplet=$VCPKG_TRIPLET" >> $GITHUB_OUTPUT
 
-                  VCPKG_INSTALLED="${{ github.workspace }}/vcpkg_installed/${VCPKG_TRIPLET}"
-                  echo "vcpkg_installed=$VCPKG_INSTALLED" >> $GITHUB_OUTPUT
-
                   echo "=== Build environment ==="
                   echo "Architecture: $ARCH"
                   echo "Homebrew prefix: $BREW_PREFIX"
                   echo "vcpkg triplet: $VCPKG_TRIPLET"
-                  echo "vcpkg installed: $VCPKG_INSTALLED"
+
+            - name: Install vcpkg
+              run: |
+                  cd /Users/runner
+                  git clone https://github.com/microsoft/vcpkg
+                  cd vcpkg
+                  ./bootstrap-vcpkg.sh
+                  echo "VCPKG_ROOT=/Users/runner/vcpkg" >> $GITHUB_ENV
+
+            - name: Cache vcpkg
+              uses: actions/cache@v3
+              with:
+                  path: |
+                      /Users/runner/vcpkg/installed
+                  key: ${{ runner.os }}-${{ steps.arch.outputs.vcpkg_triplet }}-vcpkg-${{ hashFiles('**/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-${{ steps.arch.outputs.vcpkg_triplet }}-vcpkg-
+
+            - name: Install vcpkg dependencies
+              run: |
+                  export VCPKG_ROOT=/Users/runner/vcpkg
+                  TRIPLET="${{ steps.arch.outputs.vcpkg_triplet }}"
+                  $VCPKG_ROOT/vcpkg install libvpx:$TRIPLET libyuv:$TRIPLET opus:$TRIPLET aom:$TRIPLET --clean-after-build
+
+            - name: Set vcpkg paths
+              run: |
+                  TRIPLET="${{ steps.arch.outputs.vcpkg_triplet }}"
+                  VCPKG_INSTALLED="/Users/runner/vcpkg/installed/${TRIPLET}"
+                  echo "vcpkg_installed=$VCPKG_INSTALLED" >> $GITHUB_OUTPUT
+                  echo "VCPKG_INSTALLED=$VCPKG_INSTALLED" >> $GITHUB_ENV
+              id: vcpkg_paths
 
             - name: Verify vcpkg dependencies
               run: |
-                  VCPKG_INSTALLED="${{ steps.arch.outputs.vcpkg_installed }}"
+                  VCPKG_INSTALLED="${{ steps.vcpkg_paths.outputs.vcpkg_installed }}"
                   echo "=== vcpkg installation check ==="
                   if [ -d "$VCPKG_INSTALLED" ]; then
                     echo "Found vcpkg installation at: $VCPKG_INSTALLED"
@@ -97,7 +100,7 @@ jobs:
             - name: Set build environment
               run: |
                   BREW_PREFIX="${{ steps.arch.outputs.brew_prefix }}"
-                  VCPKG_INSTALLED="${{ steps.arch.outputs.vcpkg_installed }}"
+                  VCPKG_INSTALLED="${{ steps.vcpkg_paths.outputs.vcpkg_installed }}"
 
                   # Build environment variables
                   echo "VCPKG_ROOT=/Users/runner/vcpkg" >> $GITHUB_ENV

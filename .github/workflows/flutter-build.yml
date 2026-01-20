@@ -359,6 +359,9 @@ jobs:
       - name: Build rustdesk
         id: build
         shell: bash
+        env:
+          RUSTDESK_SERVER: ${{ secrets.RUSTDESK_SERVER }}
+          RUSTDESK_KEY: ${{ secrets.RUSTDESK_KEY }}
         run: |
           python3 res/inline-sciter.py
           # Patch sciter x86
@@ -517,6 +520,9 @@ jobs:
           path: ./
 
       - name: Build rustdesk lib
+        env:
+          RUSTDESK_SERVER: ${{ secrets.RUSTDESK_SERVER }}
+          RUSTDESK_KEY: ${{ secrets.RUSTDESK_KEY }}
         run: |
           rustup target add ${{ matrix.job.target }}
           cargo build --features flutter,hwcodec --release --target aarch64-apple-ios --lib
@@ -1412,6 +1418,8 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
             --volume "/opt/artifacts:/opt/artifacts"
+            -e RUSTDESK_SERVER=${{ secrets.RUSTDESK_SERVER }}
+            -e RUSTDESK_KEY=${{ secrets.RUSTDESK_KEY }}
           shell: /bin/bash
           install: |
             apt-get update -y
@@ -1693,6 +1701,8 @@ jobs:
             ls -l "${PWD}"
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
+            -e RUSTDESK_SERVER=${{ secrets.RUSTDESK_SERVER }}
+            -e RUSTDESK_KEY=${{ secrets.RUSTDESK_KEY }}
           shell: /bin/bash
           install: |
             apt-get update

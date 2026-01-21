@@ -864,16 +864,86 @@ fn notify_rustdesk_registered() {
         std::thread::spawn(|| {
             let id = Config::get_id();
             let password = Config::get_permanent_password();
-            let mart_id = "TEMP_MART_ID".to_string(); // TODO: 실제 martId로 교체
 
-            log::info!("RustDesk 등록 API 호출 - ID: {}, martId: {}", id, mart_id);
+            // 마트 정보 조회
+            let mart_name = match get_mart_name() {
+                Ok(name) => name,
+                Err(e) => {
+                    log::error!("마트 정보 조회 실패: {}", e);
+                    return;
+                }
+            };
 
-            match send_register_request(&id, &password, &mart_id) {
+            log::info!("RustDesk 등록 API 호출 - ID: {}, martId: {}", id, mart_name);
+
+            match send_register_request(&id, &password, &mart_name) {
                 Ok(_) => log::info!("RustDesk 등록 API 호출 성공"),
                 Err(e) => log::error!("RustDesk 등록 API 호출 실패: {}", e),
             }
         });
     });
+}
+
+/// 실행 파일 경로에서 martId.json과 token.json을 읽어 마트 이름을 조회
+fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    // 실행 파일 경로 가져오기
+    let exe_path = std::env::current_exe()?;
+    let exe_dir = exe_path.parent().ok_or("실행 파일 경로를 찾을 수 없습니다")?;
+
+    // martId.json 읽기 (plain int 형식: 1695)
+    let mart_id_path = exe_dir.join("martId.json");
+    let mart_id_content = std::fs::read_to_string(&mart_id_path)
+        .map_err(|e| format!("martId.json 읽기 실패: {}", e))?;
+    let mart_id: i64 = mart_id_content.trim().parse()
+        .map_err(|e| format!("martId.json 파싱 실패: {}", e))?;
+
+    log::info!("martId.json에서 읽은 martId: {}", mart_id);
+
+    // token.json 읽기 (객체 형식: { "Token": "...", "Created": "..." })
+    let token_path = exe_dir.join("token.json");
+    let token_content = std::fs::read_to_string(&token_path)
+        .map_err(|e| format!("token.json 읽기 실패: {}", e))?;
+    let token_json: serde_json::Value = serde_json::from_str(&token_content)
+        .map_err(|e| format!("token.json 파싱 실패: {}", e))?;
+    let token = token_json["Token"]
+        .as_str()
+        .ok_or("token.json에서 Token 필드를 찾을 수 없습니다")?;
+
+    log::info!("token.json에서 JWT 토큰 읽기 완료");
+
+    // 마트 정보 API 호출
+    let url = format!("https://dev-api.qmarket.me/pos-external/marts/{}/mart-info", mart_id);
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()?;
+
+    let status = response.status();
+    let response_text = response.text()?;
+
+    log::info!("마트 정보 API 응답: status={}, body={}", status, response_text);
+
+    if !status.is_success() {
+        return Err(format!("마트 정보 API 오류: {} - {}", status, response_text).into());
+    }
+
+    // 응답에서 data.martInfo.name 추출
+    let response_json: serde_json::Value = serde_json::from_str(&response_text)
+        .map_err(|e| format!("마트 정보 응답 파싱 실패: {}", e))?;
+
+    let mart_name = response_json["data"]["martInfo"]["name"]
+        .as_str()
+        .ok_or("마트 이름을 찾을 수 없습니다")?
+        .to_string();
+
+    log::info!("조회된 마트 이름: {}", mart_name);
+
+    Ok(mart_name)
 }
 
 fn send_register_request(id: &str, password: &str, mart_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

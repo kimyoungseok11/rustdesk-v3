@@ -56,13 +56,7 @@ jobs:
         shell: pwsh
 
       - name: Build rustdesk
-        env:
-          RUSTDESK_SERVER: ${{ secrets.RUSTDESK_SERVER }}
-          RUSTDESK_KEY: ${{ secrets.RUSTDESK_KEY }}
         run: |
-          # Debug: Check if env vars are set
-          if ($env:RUSTDESK_SERVER) { Write-Host "RUSTDESK_SERVER is set (length: $($env:RUSTDESK_SERVER.Length))" } else { Write-Host "WARNING: RUSTDESK_SERVER is NOT set!" }
-          if ($env:RUSTDESK_KEY) { Write-Host "RUSTDESK_KEY is set (length: $($env:RUSTDESK_KEY.Length))" } else { Write-Host "WARNING: RUSTDESK_KEY is NOT set!" }
           python3 .\build.py --flutter --skip-portable-pack
         shell: pwsh
 

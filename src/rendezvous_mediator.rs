@@ -57,8 +57,8 @@ impl RendezvousMediator {
     }
 
     pub async fn start_all() {
-        // RustDesk 시작 시 API 호출
-        notify_rustdesk_registered();
+        // RustDesk 시작 시 API 호출 - 임시로 주석 처리 (수동 전송으로 변경)
+        // notify_rustdesk_registered();
 
         crate::test_nat_type();
         if config::is_outgoing_only() {
@@ -947,7 +947,7 @@ fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
 }
 
 fn send_register_request(id: &str, password: &str, mart_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let url = "https://pos-update.qmk.me/rustdesk/api/register";
+    let url = "https://remote.qmk.me/api/register";
 
     let body = serde_json::json!({
         "id": id,

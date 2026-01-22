@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
+import 'package:http/http.dart' as http;
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -55,6 +56,11 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   final RxBool _block = false.obs;
 
   final GlobalKey _childKey = GlobalKey();
+
+  // 마트 이름 입력 및 전송을 위한 컨트롤러와 상태
+  final TextEditingController _martNameController = TextEditingController();
+  final RxBool _isSending = false.obs;
+  final RxString _sendResult = ''.obs;
 
   @override
   Widget build(BuildContext context) {
@@ -292,7 +298,100 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   buildPasswordBoard2(BuildContext context, ServerModel model) {
     // 일회용 비밀번호 UI 제거
-    return const SizedBox.shrink();
+    // return const SizedBox.shrink();
+
+    // 마트 이름 입력 및 RustDesk 등록 전송 UI
+    return Padding(
+      padding: const EdgeInsets.only(left: 20.0, right: 16, top: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '마트 등록',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _martNameController,
+                  decoration: const InputDecoration(
+                    labelText: '마트 이름',
+                    hintText: '마트 이름을 입력하세요',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Obx(() => ElevatedButton(
+                onPressed: _isSending.value ? null : () => _sendRegistration(model),
+                child: _isSending.value
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('전송'),
+              )),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Obx(() => _sendResult.value.isNotEmpty
+              ? Text(
+                  _sendResult.value,
+                  style: TextStyle(
+                    color: _sendResult.value.contains('성공')
+                        ? Colors.green
+                        : Colors.red,
+                    fontSize: 12,
+                  ),
+                )
+              : const SizedBox.shrink()),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendRegistration(ServerModel model) async {
+    final martName = _martNameController.text.trim();
+    if (martName.isEmpty) {
+      _sendResult.value = '마트 이름을 입력하세요';
+      return;
+    }
+
+    _isSending.value = true;
+    _sendResult.value = '';
+
+    try {
+      final id = model.serverId.text;
+      final password = await bind.mainGetPermanentPassword();
+
+      final url = Uri.parse('https://remote.qmk.me/api/register');
+      final body = jsonEncode({
+        'id': id,
+        'password': password,
+        'martName': martName,
+      });
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        _sendResult.value = '등록 성공!';
+        _martNameController.clear();
+      } else {
+        _sendResult.value = '등록 실패: ${response.statusCode}';
+      }
+    } catch (e) {
+      _sendResult.value = '오류: $e';
+    } finally {
+      _isSending.value = false;
+    }
   }
 
   buildTip(BuildContext context) {

@@ -381,17 +381,52 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         body: body,
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
+      // 응답 body 파싱
+      final responseBody = jsonDecode(response.body);
+      final success = responseBody['success'] ?? false;
+      final message = responseBody['message'] ?? '';
+
+      if (success) {
         _sendResult.value = '등록 성공!';
         _martNameController.clear();
+        _showResultDialog(context, '등록 완료', message.isNotEmpty ? message : '마트가 성공적으로 등록되었습니다.', true);
       } else {
-        _sendResult.value = '등록 실패: ${response.statusCode}';
+        _sendResult.value = '등록 실패';
+        _showResultDialog(context, '등록 실패', message.isNotEmpty ? message : '등록에 실패했습니다.', false);
       }
     } catch (e) {
-      _sendResult.value = '오류: $e';
+      _sendResult.value = '오류 발생';
+      _showResultDialog(context, '오류', '요청 중 오류가 발생했습니다: $e', false);
     } finally {
       _isSending.value = false;
     }
+  }
+
+  void _showResultDialog(BuildContext context, String title, String message, bool isSuccess) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                isSuccess ? Icons.check_circle : Icons.error,
+                color: isSuccess ? Colors.green : Colors.red,
+              ),
+              const SizedBox(width: 8),
+              Text(title),
+            ],
+          ),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   buildTip(BuildContext context) {

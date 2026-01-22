@@ -70,6 +70,12 @@ jobs:
           C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static --recurse
         shell: pwsh
 
+      - name: Create dummy label.png for portable build
+        run: |
+          New-Item -ItemType Directory -Force -Path libs/portable/src/res
+          Copy-Item -Path flutter/assets/icon.png -Destination libs/portable/src/res/label.png
+        shell: pwsh
+
       - name: Build rustdesk with Installer
         run: |
           # --flutter 옵션은 빌드 후 portable-packer를 사용하여 인스톨러를 만듭니다.

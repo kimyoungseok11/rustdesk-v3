@@ -82,7 +82,7 @@ jobs:
         shell: pwsh
 
       - name: Preprocess MSI files
-        run: python3 res/msi/preprocess.py --dist-dir flutter/build/windows/x64/runner/Release
+        run: python3 res/msi/preprocess.py --dist-dir ${{ github.workspace }}/flutter/build/windows/x64/runner/Release
         shell: pwsh
         
       - name: Build MSI Installer

@@ -85,6 +85,10 @@ jobs:
         run: python3 res/msi/preprocess.py --dist-dir ${{ github.workspace }}/flutter/build/windows/x64/runner/Release
         shell: pwsh
         
+      - name: Restore NuGet Packages
+        run: nuget restore res/msi/msi.sln
+        shell: pwsh
+
       - name: Build MSI Installer
         run: msbuild res/msi/msi.sln /p:Configuration=Release /p:Platform=x64
         shell: pwsh

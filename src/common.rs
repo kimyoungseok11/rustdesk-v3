@@ -116,8 +116,10 @@ pub fn global_init() -> bool {
         // EXE_RENDEZVOUS_SERVER는 get_rendezvous_server()에서 가장 우선순위가 높음
         *hbb_common::config::EXE_RENDEZVOUS_SERVER.write().unwrap() = server.to_string();
         // OVERWRITE_SETTINGS에도 설정하여 UI에서도 표시되도록 함
-        hbb_common::config::OVERWRITE_SETTINGS.write().unwrap()
-            .insert("custom-rendezvous-server".to_string(), server.to_string());
+        let mut settings = hbb_common::config::OVERWRITE_SETTINGS.write().unwrap();
+        settings.insert("custom-rendezvous-server".to_string(), server.to_string());
+        // Relay Server도 같은 서버로 설정
+        settings.insert("relay-server".to_string(), server.to_string());
     }
     if let Some(key) = option_env!("RUSTDESK_KEY") {
         // OVERWRITE_SETTINGS는 Config::get_option()에서 가장 우선순위가 높음

@@ -70,34 +70,42 @@ jobs:
           C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static --recurse
         shell: pwsh
 
-      - name: Create dummy label.png for portable build
-        run: |
-          New-Item -ItemType Directory -Force -Path libs/portable/src/res
-          Copy-Item -Path res/mac-tray-dark-x2.png -Destination libs/portable/src/res/label.png
+      - name: Build App Binaries
+        run: python3 build.py --flutter --skip-portable-pack
         shell: pwsh
 
-      - name: Build rustdesk with Installer
-        run: |
-          # --flutter 옵션은 빌드 후 portable-packer를 사용하여 인스톨러를 만듭니다.
-          python3 .\build.py --flutter
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.3.1
+
+      - name: Add WiX Toolset to PATH
+        run: echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Preprocess MSI files
+        run: python3 res/msi/preprocess.py --dist-dir flutter/build/windows/x64/runner/Release
+        shell: pwsh
+        
+      - name: Build MSI Installer
+        run: msbuild res/msi/msi.sln /p:Configuration=Release /p:Platform=x64
         shell: pwsh
 
       - name: Rename and Prepare Artifact
         run: |
-          # 인스톨러는 프로젝트 루트에 rustdesk-{version}-install.exe로 생성됨
-          $installerPath = Get-ChildItem -Path "." -Filter "rustdesk-*-install.exe" | Select-Object -First 1
-          if ($installerPath) {
-            Move-Item -Path $installerPath.FullName -Destination "./rustdesk-setup.exe"
-            Write-Host "Installer created: $($installerPath.Name) -> rustdesk-setup.exe"
+          $msiPath = Get-ChildItem -Path ./res/msi/Package/bin -Recurse -Filter "*.msi" | Select-Object -First 1
+          if ($msiPath) {
+            $version = (Get-Content -Path Cargo.toml | Select-String -Pattern 'version = "([0-9.]+)"').Matches.Groups[1].Value
+            $newName = "rustdesk-$version-x86_64.msi"
+            Move-Item -Path $msiPath.FullName -Destination "./$newName"
+            Write-Host "MSI created: $($msiPath.Name) -> $newName"
+            echo "MSI_NAME=$newName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           } else {
-            Write-Error "Installer not found in project root"
-            Get-ChildItem -Path "." -Filter "*.exe" | ForEach-Object { Write-Host "Found: $($_.Name)" }
+            Write-Error "MSI not found after build."
             exit 1
           }
         shell: pwsh
 
-      - name: Upload installer
+      - name: Upload MSI installer
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-service-installer
-          path: rustdesk-setup.exe
+          name: rustdesk-windows-msi-installer
+          path: ${{ env.MSI_NAME }}

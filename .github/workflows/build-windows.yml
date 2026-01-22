@@ -8,6 +8,7 @@ env:
   FLUTTER_VERSION: "3.24.5"
   LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  CARGO_INCREMENTAL: 0
 
 jobs:
   build-windows:
@@ -15,6 +16,8 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v1
@@ -26,13 +29,11 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-pc-windows-msvc
-          components: rustfmt
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           prefix-key: "v1-rust"
-          shared-key: "windows"
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
@@ -41,14 +42,21 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Replace engine with rustdesk custom flutter engine
+      - name: Replace engine with custom engine
         run: |
-          flutter doctor -v
           flutter precache --windows
           Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
-          mv -Force windows-x64-release/* C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
+          $flutterPath = "C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/"
+          if (!(Test-Path $flutterPath)) { New-Item -ItemType Directory -Force -Path $flutterPath }
+          mv -Force windows-x64-release/* $flutterPath
         shell: pwsh
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-windows-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -59,27 +67,31 @@ jobs:
 
       - name: Install vcpkg dependencies
         run: |
-          C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static
+          C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static --recurse
         shell: pwsh
 
-      - name: Build rustdesk
+      - name: Build rustdesk with Installer
         run: |
+          # --flutter 옵션은 빌드 후 portable-packer를 사용하여 인스톨러를 만듭니다.
           python3 .\build.py --flutter
         shell: pwsh
 
-      - name: Rename installer
+      - name: Rename and Prepare Artifact
         run: |
-          $installerPath = Get-ChildItem -Path "./libs/portable" -Filter "rustdesk-*-install.exe" | Select-Object -First 1
+          # 인스톨러는 프로젝트 루트에 rustdesk-{version}-install.exe로 생성됨
+          $installerPath = Get-ChildItem -Path "." -Filter "rustdesk-*-install.exe" | Select-Object -First 1
           if ($installerPath) {
-            Move-Item -Path $installerPath.FullName -Destination "./installer.exe"
-            echo "Installer renamed to installer.exe"
+            Move-Item -Path $installerPath.FullName -Destination "./rustdesk-setup.exe"
+            Write-Host "Installer created: $($installerPath.Name) -> rustdesk-setup.exe"
           } else {
-            echo "Installer not found"
+            Write-Error "Installer not found in project root"
+            Get-ChildItem -Path "." -Filter "*.exe" | ForEach-Object { Write-Host "Found: $($_.Name)" }
+            exit 1
           }
         shell: pwsh
 
-      - name: Upload artifact
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-installer
-          path: installer.exe
+          name: rustdesk-windows-service-installer
+          path: rustdesk-setup.exe

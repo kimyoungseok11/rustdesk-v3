@@ -73,7 +73,7 @@ jobs:
       - name: Create dummy label.png for portable build
         run: |
           New-Item -ItemType Directory -Force -Path libs/portable/src/res
-          Copy-Item -Path res/icon.png -Destination libs/portable/src/res/label.png
+          Copy-Item -Path res/mac-tray-dark-x2.png -Destination libs/portable/src/res/label.png
         shell: pwsh
 
       - name: Build rustdesk with Installer

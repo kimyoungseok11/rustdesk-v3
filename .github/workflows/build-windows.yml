@@ -82,7 +82,7 @@ jobs:
         shell: pwsh
 
       - name: Preprocess MSI files
-        run: python3 res/msi/preprocess.py --dist-dir ${{ github.workspace }}/flutter/build/windows/x64/runner/Release
+        run: python3 res/msi/preprocess.py --dist-dir ${{ github.workspace }}/flutter/build/windows/x64/runner/Release --app-name "관리원격지원"
         shell: pwsh
 
       - name: Restore NuGet Packages
@@ -98,7 +98,7 @@ jobs:
           $msiPath = Get-ChildItem -Path ./res/msi/Package/bin -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msiPath) {
             $version = (Get-Content -Path Cargo.toml | Select-String -Pattern 'version = "([0-9.]+)"').Matches.Groups[1].Value
-            $newName = "rustdesk-$version-x86_64.msi"
+            $newName = "관리원격지원-$version-x86_64.msi"
             Move-Item -Path $msiPath.FullName -Destination "./$newName"
             Write-Host "MSI created: $($msiPath.Name) -> $newName"
             echo "MSI_NAME=$newName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -111,5 +111,5 @@ jobs:
       - name: Upload MSI installer
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-msi-installer
+          name: 관리원격지원-windows-msi-installer
           path: ${{ env.MSI_NAME }}

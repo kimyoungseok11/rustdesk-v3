@@ -946,13 +946,13 @@ fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     Ok(mart_name)
 }
 
-fn send_register_request(id: &str, password: &str, mart_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn send_register_request(id: &str, password: &str, mart_name: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let url = "https://remote.qmk.me/api/register";
 
     let body = serde_json::json!({
         "id": id,
         "password": password,
-        "martId": mart_id
+        "martName": mart_name
     });
 
     log::info!("API 요청: {} - body: {}", url, body);

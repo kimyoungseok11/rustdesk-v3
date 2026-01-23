@@ -392,7 +392,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         _showResultDialog(context, '등록 완료', message.isNotEmpty ? message : '마트가 성공적으로 등록되었습니다.', true);
       } else {
         _sendResult.value = '등록 실패';
-        _showResultDialog(context, '등록 실패', message.isNotEmpty ? message : '등록에 실패했습니다.', false);
+        _showResultDialog(context, '등록 실패', message.isNotEmpty ? message : message, false);
       }
     } catch (e) {
       _sendResult.value = '오류 발생';

@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "Purslane Ltd" "\0"
-            VALUE "FileDescription", "Managed Remote Service" "\0"
+            VALUE "FileDescription", "Remote Support" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "ManagedRemoteService" "\0"
+            VALUE "InternalName", "RemoteSupport" "\0"
             VALUE "LegalCopyright", "Copyright © 2025 Purslane Ltd. All rights reserved." "\0"
-            VALUE "OriginalFilename", "ManagedRemoteService.exe" "\0"
-            VALUE "ProductName", "Managed Remote Service" "\0"
+            VALUE "OriginalFilename", "RemoteSupport.exe" "\0"
+            VALUE "ProductName", "Remote Support" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

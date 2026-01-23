@@ -201,9 +201,9 @@ exclude = ["vdi/host", "examples/custom_plugin"]
 
 [package.metadata.winres]
 LegalCopyright = "Copyright © 2025 Purslane Ltd. All rights reserved."
-ProductName = "Managed Remote Service"
-FileDescription = "Managed Remote Service"
-OriginalFilename = "ManagedRemoteService.exe"
+ProductName = "Remote Support"
+FileDescription = "Remote Support"
+OriginalFilename = "RemoteSupport.exe"
 
 [target.'cfg(target_os="windows")'.build-dependencies]
 winres = "0.1"

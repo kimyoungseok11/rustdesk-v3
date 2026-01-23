@@ -1,10 +1,10 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(ManagedRemoteService LANGUAGES CXX)
+project(RemoteSupport LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "ManagedRemoteService")
+set(BINARY_NAME "RemoteSupport")
 
 # Explicitly opt into modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

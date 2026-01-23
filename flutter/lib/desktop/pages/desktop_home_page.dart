@@ -311,31 +311,31 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _martNameController,
-                  decoration: const InputDecoration(
-                    labelText: '마트 이름',
-                    hintText: '마트 이름을 입력하세요',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                ),
+          TextField(
+            controller: _martNameController,
+            decoration: const InputDecoration(
+              labelText: '마트 이름',
+              hintText: '마트 이름을 입력하세요',
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: Obx(() => ElevatedButton(
+              onPressed: _isSending.value ? null : () => _sendRegistration(model),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              const SizedBox(width: 10),
-              Obx(() => ElevatedButton(
-                onPressed: _isSending.value ? null : () => _sendRegistration(model),
-                child: _isSending.value
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('설치하기'),
-              )),
-            ],
+              child: _isSending.value
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('설치하기'),
+            )),
           ),
           const SizedBox(height: 8),
           Obx(() => _sendResult.value.isNotEmpty

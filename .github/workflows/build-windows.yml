@@ -8,6 +8,7 @@ env:
   FLUTTER_VERSION: "3.24.5"
   LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  CARGO_INCREMENTAL: 0
 
 jobs:
   build-windows:
@@ -15,6 +16,8 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v1
@@ -26,22 +29,34 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-pc-windows-msvc
-          components: rustfmt
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          cache: true
 
-      - name: Replace engine with rustdesk custom flutter engine
+      - name: Replace engine with custom engine
         run: |
-          flutter doctor -v
           flutter precache --windows
           Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
-          mv -Force windows-x64-release/* C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
+          $flutterPath = "C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/"
+          if (!(Test-Path $flutterPath)) { New-Item -ItemType Directory -Force -Path $flutterPath }
+          mv -Force windows-x64-release/* $flutterPath
         shell: pwsh
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-windows-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -52,53 +67,49 @@ jobs:
 
       - name: Install vcpkg dependencies
         run: |
-          C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static
+          C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static --recurse
         shell: pwsh
 
-      - name: Build rustdesk
-        run: |
-          python3 .\build.py --flutter --skip-portable-pack
+      - name: Build App Binaries
+        run: python3 build.py --flutter --skip-portable-pack
         shell: pwsh
 
-      - name: Add admin manifest
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.3.1
+
+      - name: Add WiX Toolset to PATH
+        run: echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Preprocess MSI files
+        run: python3 res/msi/preprocess.py --dist-dir ${{ github.workspace }}/flutter/build/windows/x64/runner/Release
+        shell: pwsh
+
+      - name: Restore NuGet Packages
+        run: nuget restore res/msi/msi.sln
+        shell: pwsh
+
+      - name: Build MSI Installer
+        run: msbuild res/msi/msi.sln /p:Configuration=Release /p:Platform=x64
+        shell: pwsh
+
+      - name: Rename and Prepare Artifact
         run: |
-          $manifest = @"
-          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-          <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-            <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
-              <security>
-                <requestedPrivileges>
-                  <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
-                </requestedPrivileges>
-              </security>
-            </trustInfo>
-          </assembly>
-          "@
-          $manifest | Out-File -FilePath "admin.manifest" -Encoding UTF8
-          $exePath = "./flutter/build/windows/x64/runner/Release/rustdesk.exe"
-
-          # Find mt.exe in Windows SDK
-          $mtPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "mt.exe" | Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1 -ExpandProperty FullName
-
-          if (Test-Path $exePath) {
-            if ($mtPath) {
-              & $mtPath -manifest admin.manifest -outputresource:"$exePath;#1"
-              echo "Admin manifest added successfully using $mtPath"
-            } else {
-              echo "mt.exe not found"
-            }
+          $msiPath = Get-ChildItem -Path ./res/msi/Package/bin -Recurse -Filter "*.msi" | Select-Object -First 1
+          if ($msiPath) {
+            $version = (Get-Content -Path Cargo.toml | Select-String -Pattern 'version = "([0-9.]+)"').Matches.Groups[1].Value
+            $newName = "rustdesk-$version-x86_64.msi"
+            Move-Item -Path $msiPath.FullName -Destination "./$newName"
+            Write-Host "MSI created: $($msiPath.Name) -> $newName"
+            echo "MSI_NAME=$newName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           } else {
-            echo "EXE not found at $exePath"
+            Write-Error "MSI not found after build."
+            exit 1
           }
         shell: pwsh
 
-      - name: Move build output
-        run: |
-          mv ./flutter/build/windows/x64/runner/Release ./rustdesk
-        shell: pwsh
-
-      - name: Upload artifact
+      - name: Upload MSI installer
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-x64
-          path: rustdesk/
+          name: rustdesk-windows-msi-installer
+          path: ${{ env.MSI_NAME }}

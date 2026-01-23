@@ -18,7 +18,7 @@
 		<CustomAction Id="CreateStartService.SetParam" Return="check" Property="CreateStartService" Value="$(var.Product);&quot;[INSTALLFOLDER_INNER]$(var.Product).exe&quot; --service" />
 		<CustomAction Id="TryStopDeleteService.SetParam" Return="check" Property="TryStopDeleteService" Value="$(var.Product)" />
 
-		<CustomAction Id="LaunchApp" ExeCommand="" Return="asyncNoWait" FileRef="App.exe" />
+		<CustomAction Id="LaunchApp" ExeCommand="--install-service" Return="asyncNoWait" FileRef="App.exe" />
 		<CustomAction Id="LaunchAppTray" ExeCommand=" --tray" Return="asyncNoWait" FileRef="App.exe" />
 		<Property Id="TerminateProcesses" Value="AppTest.exe" />
 		<CustomAction Id="TerminateProcesses.SetParam" Return="check" Property="TerminateProcesses" Value="$(var.Product).exe" />

@@ -62,6 +62,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   final RxBool _isSending = false.obs;
   final RxString _sendResult = ''.obs;
   final RxString _registeredMartName = ''.obs;  // 이미 등록된 마트 이름
+  bool _martCheckDone = false;  // 마트 체크 완료 여부
 
   @override
   Widget build(BuildContext context) {
@@ -477,19 +478,13 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   // 앱 시작 시 마트 등록 여부 확인
   Future<void> _checkMartRegistration() async {
-    try {
-      final id = gFFI.serverModel.serverId.text;
-      _writeLog('ID: $id');
-      if (id.isEmpty) {
-        // ID가 아직 로드되지 않았으면 잠시 후 재시도
-        _writeLog('ID가 비어있어 2초 후 재시도');
-        Future.delayed(const Duration(seconds: 2), _checkMartRegistration);
-        return;
-      }
+    final id = gFFI.serverModel.serverId.text;
+    _writeLog('=== 마트 체크 시작: ID=$id ===');
 
+    try {
       final url = Uri.parse('https://remote.qmk.me/namecheck');
       final body = jsonEncode({'id': id});
-      _writeLog('요청 body: $body');
+      _writeLog('요청: $body');
 
       final response = await http.post(
         url,
@@ -501,8 +496,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       final responseBody = jsonDecode(response.body);
       final success = responseBody['success'] ?? true;
       final martName = responseBody['martName'];
-
-      _writeLog('success: $success, martName: $martName');
 
       // success가 false이고 martName이 있으면 이미 등록된 상태
       if (!success && martName != null && martName.toString().isNotEmpty) {
@@ -517,8 +510,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   // 로그를 파일로 저장
   void _writeLog(String message) {
     try {
-      final home = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
-      final logFile = File('$home\\Desktop\\martcheck_log.txt');
+      final logFile = File('C:\\Temp\\martcheck_log.txt');
+      // 폴더가 없으면 생성
+      final dir = Directory('C:\\Temp');
+      if (!dir.existsSync()) {
+        dir.createSync(recursive: true);
+      }
       final timestamp = DateTime.now().toString();
       logFile.writeAsStringSync('[$timestamp] $message\n', mode: FileMode.append);
     } catch (e) {
@@ -886,6 +883,13 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     super.initState();
     _updateTimer = periodic_immediate(const Duration(seconds: 1), () async {
       await gFFI.serverModel.fetchID();
+
+      // ID가 로드되면 마트 등록 여부 확인 (한 번만 실행)
+      if (!_martCheckDone && gFFI.serverModel.serverId.text.isNotEmpty) {
+        _martCheckDone = true;
+        _checkMartRegistration();
+      }
+
       final error = await bind.mainGetError();
       if (systemError != error) {
         systemError = error;
@@ -935,9 +939,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     });
     Get.put<RxBool>(svcStopped, tag: 'stop-service');
     rustDeskWinManager.registerActiveWindowListener(onActiveWindowChanged);
-
-    // 앱 시작 시 마트 등록 여부 확인
-    _checkMartRegistration();
 
     screenToMap(window_size.Screen screen) => {
       'frame': {

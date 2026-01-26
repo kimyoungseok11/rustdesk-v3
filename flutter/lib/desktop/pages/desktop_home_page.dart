@@ -420,6 +420,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
       if (success) {
         _sendResult.value = '등록 성공!';
+        _registeredMartName.value = martName;  // UI 업데이트 - 입력칸/버튼 숨기고 마트이름 표시
         _martNameController.clear();
         _showResultDialog(
           context,

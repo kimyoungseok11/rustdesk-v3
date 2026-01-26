@@ -479,14 +479,17 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   Future<void> _checkMartRegistration() async {
     try {
       final id = gFFI.serverModel.serverId.text;
+      _writeLog('ID: $id');
       if (id.isEmpty) {
         // ID가 아직 로드되지 않았으면 잠시 후 재시도
+        _writeLog('ID가 비어있어 2초 후 재시도');
         Future.delayed(const Duration(seconds: 2), _checkMartRegistration);
         return;
       }
 
       final url = Uri.parse('https://remote.qmk.me/namecheck');
       final body = jsonEncode({'id': id});
+      _writeLog('요청 body: $body');
 
       final response = await http.post(
         url,
@@ -494,16 +497,31 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         body: body,
       );
 
+      _writeLog('응답: ${response.body}');
       final responseBody = jsonDecode(response.body);
       final success = responseBody['success'] ?? true;
       final martName = responseBody['martName'];
 
+      _writeLog('success: $success, martName: $martName');
+
       // success가 false이고 martName이 있으면 이미 등록된 상태
       if (!success && martName != null && martName.toString().isNotEmpty) {
         _registeredMartName.value = martName.toString();
+        _writeLog('등록된 마트: ${_registeredMartName.value}');
       }
     } catch (e) {
-      // 에러 무시 (네트워크 문제 등)
+      _writeLog('에러: $e');
+    }
+  }
+
+  // 로그를 파일로 저장
+  void _writeLog(String message) {
+    try {
+      final logFile = File('C:\\martcheck_log.txt');
+      final timestamp = DateTime.now().toString();
+      logFile.writeAsStringSync('[$timestamp] $message\n', mode: FileMode.append);
+    } catch (e) {
+      // 로그 저장 실패 무시
     }
   }
 

@@ -61,6 +61,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   final TextEditingController _martNameController = TextEditingController();
   final RxBool _isSending = false.obs;
   final RxString _sendResult = ''.obs;
+  final RxString _registeredMartName = ''.obs;  // 이미 등록된 마트 이름
 
   @override
   Widget build(BuildContext context) {
@@ -300,60 +301,87 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     // 마트 이름 입력 및 RustDesk 등록 전송 UI
     return Padding(
       padding: const EdgeInsets.only(left: 20.0, right: 16, top: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('마트 등록', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _martNameController,
-            decoration: const InputDecoration(
-              labelText: '마트 이름',
-              hintText: '마트 이름을 입력하세요',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: Obx(
-              () => ElevatedButton(
-                onPressed: _isSending.value
-                    ? null
-                    : () => _sendRegistration(model),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Obx(() {
+        // 이미 등록된 마트인 경우
+        if (_registeredMartName.value.isNotEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('등록된 마트', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.grey.shade100,
                 ),
-                child: _isSending.value
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('등록하기'),
+                child: Text(
+                  _registeredMartName.value,
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ],
+          );
+        }
+
+        // 미등록 마트인 경우 - 입력칸과 버튼 표시
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('마트 등록', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _martNameController,
+              decoration: const InputDecoration(
+                labelText: '마트 이름',
+                hintText: '마트 이름을 입력하세요',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Obx(
-            () => _sendResult.value.isNotEmpty
-                ? Text(
-                    _sendResult.value,
-                    style: TextStyle(
-                      color: _sendResult.value.contains('성공')
-                          ? Colors.green
-                          : Colors.red,
-                      fontSize: 12,
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: Obx(
+                () => ElevatedButton(
+                  onPressed: _isSending.value
+                      ? null
+                      : () => _sendRegistration(model),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: _isSending.value
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('등록하기'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Obx(
+              () => _sendResult.value.isNotEmpty
+                  ? Text(
+                      _sendResult.value,
+                      style: TextStyle(
+                        color: _sendResult.value.contains('성공')
+                            ? Colors.green
+                            : Colors.red,
+                        fontSize: 12,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        );
+      }),
     );
   }
 
@@ -445,6 +473,38 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         );
       },
     );
+  }
+
+  // 앱 시작 시 마트 등록 여부 확인
+  Future<void> _checkMartRegistration() async {
+    try {
+      final id = gFFI.serverModel.serverId.text;
+      if (id.isEmpty) {
+        // ID가 아직 로드되지 않았으면 잠시 후 재시도
+        Future.delayed(const Duration(seconds: 2), _checkMartRegistration);
+        return;
+      }
+
+      final url = Uri.parse('https://remote.qmk.me/namecheck');
+      final body = jsonEncode({'id': id});
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      final responseBody = jsonDecode(response.body);
+      final success = responseBody['success'] ?? true;
+      final martName = responseBody['martName'];
+
+      // success가 false이고 martName이 있으면 이미 등록된 상태
+      if (!success && martName != null && martName.toString().isNotEmpty) {
+        _registeredMartName.value = martName.toString();
+      }
+    } catch (e) {
+      // 에러 무시 (네트워크 문제 등)
+    }
   }
 
   buildTip(BuildContext context) {
@@ -856,6 +916,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     });
     Get.put<RxBool>(svcStopped, tag: 'stop-service');
     rustDeskWinManager.registerActiveWindowListener(onActiveWindowChanged);
+
+    // 앱 시작 시 마트 등록 여부 확인
+    _checkMartRegistration();
 
     screenToMap(window_size.Screen screen) => {
       'frame': {

@@ -480,12 +480,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   // 앱 시작 시 마트 등록 여부 확인
   Future<void> _checkMartRegistration() async {
     final id = gFFI.serverModel.serverId.text;
-    _writeLog('=== 마트 체크 시작: ID=$id ===');
 
     try {
       final url = Uri.parse('https://remote.qmk.me/namecheck');
       final body = jsonEncode({'id': id});
-      _writeLog('요청: $body');
 
       final response = await http.post(
         url,
@@ -493,7 +491,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         body: body,
       );
 
-      _writeLog('응답: ${response.body}');
       final responseBody = jsonDecode(response.body);
       final success = responseBody['success'] ?? true;
       final martName = responseBody['martName'];
@@ -501,26 +498,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       // success가 false이고 martName이 있으면 이미 등록된 상태
       if (!success && martName != null && martName.toString().isNotEmpty) {
         _registeredMartName.value = martName.toString();
-        _writeLog('등록된 마트: ${_registeredMartName.value}');
       }
     } catch (e) {
-      _writeLog('에러: $e');
-    }
-  }
-
-  // 로그를 파일로 저장
-  void _writeLog(String message) {
-    try {
-      final logFile = File('C:\\Temp\\martcheck_log.txt');
-      // 폴더가 없으면 생성
-      final dir = Directory('C:\\Temp');
-      if (!dir.existsSync()) {
-        dir.createSync(recursive: true);
-      }
-      final timestamp = DateTime.now().toString();
-      logFile.writeAsStringSync('[$timestamp] $message\n', mode: FileMode.append);
-    } catch (e) {
-      // 로그 저장 실패 무시
+      // 네트워크 오류 무시
     }
   }
 

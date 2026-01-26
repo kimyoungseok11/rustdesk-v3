@@ -517,7 +517,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   // 로그를 파일로 저장
   void _writeLog(String message) {
     try {
-      final logFile = File('C:\\martcheck_log.txt');
+      final home = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
+      final logFile = File('$home\\Desktop\\martcheck_log.txt');
       final timestamp = DateTime.now().toString();
       logFile.writeAsStringSync('[$timestamp] $message\n', mode: FileMode.append);
     } catch (e) {

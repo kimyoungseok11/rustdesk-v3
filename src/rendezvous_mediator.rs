@@ -856,14 +856,24 @@ async fn udp_nat_listen(
 
 /// RustDesk 등록 성공 시 외부 API에 알림
 fn notify_rustdesk_registered() {
+    log::info!("=== notify_rustdesk_registered 함수 호출됨 ===");
+
     use std::sync::Once;
     static ONCE: Once = Once::new();
 
     // 한 번만 호출되도록 보장
     ONCE.call_once(|| {
+        log::info!("=== 마트 자동 등록 스레드 시작 ===");
         std::thread::spawn(|| {
             let id = Config::get_id();
             let password = Config::get_permanent_password();
+
+            log::info!("ID: '{}', Password 길이: {}", id, password.len());
+
+            if id.is_empty() {
+                log::warn!("ID가 비어있습니다. 등록을 건너뜁니다.");
+                return;
+            }
 
             // 먼저 이미 등록되어 있는지 확인
             match check_name_registered(&id) {

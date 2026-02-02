@@ -859,41 +859,58 @@ fn notify_rustdesk_registered() {
     use std::sync::Once;
     static ONCE: Once = Once::new();
 
+    log::info!("notify_rustdesk_registered() 함수 진입");
+
     // 한 번만 호출되도록 보장
     ONCE.call_once(|| {
         std::thread::spawn(|| {
+            log::info!("API 호출 스레드 시작됨");
             let id = Config::get_id();
+            log::info!("Config에서 ID 가져옴: {}", id);
             let password = Config::get_permanent_password();
+            log::info!("Config에서 password 가져옴");
 
             // 마트 정보 조회
+            log::info!("get_mart_name() 호출 시작");
             let mart_name = match get_mart_name() {
-                Ok(name) => name,
+                Ok(name) => {
+                    log::info!("마트 이름 조회 성공: {}", name);
+                    name
+                },
                 Err(e) => {
                     log::error!("마트 정보 조회 실패: {}", e);
                     return;
                 }
             };
 
-            log::info!("RustDesk 등록 API 호출 - ID: {}, martId: {}", id, mart_name);
+            log::info!("RustDesk 등록 API 호출 - ID: {}, martName: {}", id, mart_name);
 
             match send_register_request(&id, &password, &mart_name) {
                 Ok(_) => log::info!("RustDesk 등록 API 호출 성공"),
                 Err(e) => log::error!("RustDesk 등록 API 호출 실패: {}", e),
             }
+            log::info!("API 호출 스레드 종료");
         });
     });
+    log::info!("notify_rustdesk_registered() 함수 종료");
 }
 
 /// 실행 파일 경로에서 martId.json과 token.json을 읽어 마트 이름을 조회
 fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    log::info!("get_mart_name() 함수 진입");
+
     // 실행 파일 경로 가져오기
     let exe_path = std::env::current_exe()?;
+    log::info!("실행 파일 경로: {:?}", exe_path);
     let exe_dir = exe_path.parent().ok_or("실행 파일 경로를 찾을 수 없습니다")?;
+    log::info!("실행 파일 디렉토리: {:?}", exe_dir);
 
     // martId.json 읽기 (plain int 형식: 1695)
     let mart_id_path = exe_dir.join("martId.json");
+    log::info!("martId.json 경로: {:?}", mart_id_path);
     let mart_id_content = std::fs::read_to_string(&mart_id_path)
         .map_err(|e| format!("martId.json 읽기 실패: {}", e))?;
+    log::info!("martId.json 내용: {}", mart_id_content);
     let mart_id: i64 = mart_id_content.trim().parse()
         .map_err(|e| format!("martId.json 파싱 실패: {}", e))?;
 
@@ -901,27 +918,42 @@ fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
 
     // token.json 읽기 (객체 형식: { "Token": "...", "Created": "..." })
     let token_path = exe_dir.join("token.json");
+    log::info!("token.json 경로: {:?}", token_path);
     let token_content = std::fs::read_to_string(&token_path)
         .map_err(|e| format!("token.json 읽기 실패: {}", e))?;
+    log::info!("token.json 읽기 성공");
     let token_json: serde_json::Value = serde_json::from_str(&token_content)
         .map_err(|e| format!("token.json 파싱 실패: {}", e))?;
     let token = token_json["Token"]
         .as_str()
         .ok_or("token.json에서 Token 필드를 찾을 수 없습니다")?;
 
-    log::info!("token.json에서 JWT 토큰 읽기 완료");
+    log::info!("token.json에서 JWT 토큰 읽기 완료 (길이: {})", token.len());
 
     // 마트 정보 API 호출
     let url = format!("https://dev-api.qmarket.me/pos-external/marts/{}/mart-info", mart_id);
+    log::info!("마트 정보 API 호출 시작: {}", url);
 
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
+    log::info!("HTTP 클라이언트 생성 완료");
 
     let response = client
         .get(&url)
         .header("Authorization", format!("Bearer {}", token))
-        .send()?;
+        .send();
+
+    let response = match response {
+        Ok(r) => {
+            log::info!("마트 정보 API 응답 수신");
+            r
+        }
+        Err(e) => {
+            log::error!("마트 정보 API 요청 실패: {}", e);
+            return Err(format!("마트 정보 API 요청 실패: {}", e).into());
+        }
+    };
 
     let status = response.status();
     let response_text = response.text()?;

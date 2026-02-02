@@ -57,8 +57,8 @@ impl RendezvousMediator {
     }
 
     pub async fn start_all() {
-        // RustDesk 시작 시 API 호출 - 임시로 주석 처리 (수동 전송으로 변경)
-        // notify_rustdesk_registered();
+        // RustDesk 시작 시 API 호출 - token.json/martId.json에서 마트 이름 읽어서 자동 등록
+        notify_rustdesk_registered();
 
         crate::test_nat_type();
         if config::is_outgoing_only() {
@@ -865,6 +865,20 @@ fn notify_rustdesk_registered() {
             let id = Config::get_id();
             let password = Config::get_permanent_password();
 
+            // 먼저 이미 등록되어 있는지 확인
+            match check_name_registered(&id) {
+                Ok(Some(mart_name)) => {
+                    log::info!("이미 등록된 마트입니다: {}", mart_name);
+                    return;
+                }
+                Ok(None) => {
+                    log::info!("등록되지 않은 ID입니다. 등록을 진행합니다.");
+                }
+                Err(e) => {
+                    log::warn!("namecheck 실패, 등록을 시도합니다: {}", e);
+                }
+            }
+
             // 마트 정보 조회
             let mart_name = match get_mart_name() {
                 Ok(name) => name,
@@ -882,6 +896,46 @@ fn notify_rustdesk_registered() {
             }
         });
     });
+}
+
+/// 이미 등록된 마트인지 확인
+/// 등록되어 있으면 Some(마트이름), 등록되지 않았으면 None 반환
+fn check_name_registered(id: &str) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let url = "https://remote.qmk.me/namecheck";
+
+    let body = serde_json::json!({
+        "id": id
+    });
+
+    log::info!("namecheck API 요청: {} - body: {}", url, body);
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+
+    let response = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .body(body.to_string())
+        .send()?;
+
+    let status = response.status();
+    let response_text = response.text()?;
+
+    log::info!("namecheck API 응답: status={}, body={}", status, response_text);
+
+    let response_json: serde_json::Value = serde_json::from_str(&response_text)
+        .map_err(|e| format!("namecheck 응답 파싱 실패: {}", e))?;
+
+    let success = response_json["success"].as_bool().unwrap_or(true);
+    let mart_name = response_json["martName"].as_str();
+
+    // success가 false이고 martName이 있으면 이미 등록된 상태
+    if !success && mart_name.is_some() && !mart_name.unwrap().is_empty() {
+        Ok(Some(mart_name.unwrap().to_string()))
+    } else {
+        Ok(None)
+    }
 }
 
 /// 실행 파일 경로에서 martId.json과 token.json을 읽어 마트 이름을 조회

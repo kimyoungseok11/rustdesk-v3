@@ -59,6 +59,25 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   final RxString _registeredMartName = ''.obs;
   bool _martRegistrationDone = false;
 
+  /// C:\POS\LOG에 로그 파일 작성
+  void _writeLog(String message) {
+    try {
+      final logDir = Directory('C:\\POS\\LOG');
+      if (!logDir.existsSync()) {
+        logDir.createSync(recursive: true);
+      }
+      final logFile = File('C:\\POS\\LOG\\rustdesk_mart.log');
+      final timestamp = DateTime.now().toString();
+      logFile.writeAsStringSync(
+        '[$timestamp] $message\n',
+        mode: FileMode.append,
+      );
+      debugPrint(message);
+    } catch (e) {
+      debugPrint('로그 파일 쓰기 실패: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -313,14 +332,14 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       final id = gFFI.serverModel.serverId.text;
       final idFormatted = _formatIdWithSpaces(id);
 
-      debugPrint('=== 마트 자동 등록 시작 ===');
-      debugPrint('원본 ID: $id, 포맷된 ID: $idFormatted');
+      _writeLog('=== 마트 자동 등록 시작 ===');
+      _writeLog('원본 ID: $id, 포맷된 ID: $idFormatted');
 
       // 1. namecheck API 호출 - 이미 등록되어 있는지 확인
       final nameCheckResult = await _checkNameRegistered(idFormatted);
       if (nameCheckResult != null) {
         // 이미 등록된 경우
-        debugPrint('이미 등록된 마트: $nameCheckResult');
+        _writeLog('이미 등록된 마트: $nameCheckResult');
         _registeredMartName.value = nameCheckResult;
         return;
       }
@@ -328,7 +347,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       // 2. 미등록인 경우 - C:\에서 martId.json, token.json 읽어서 마트 정보 조회
       final martName = await _getMartName();
       if (martName == null) {
-        debugPrint('마트 정보 조회 실패');
+        _writeLog('마트 정보 조회 실패');
         return;
       }
 
@@ -338,11 +357,11 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           await _sendRegisterRequest(idFormatted, password, martName);
 
       if (success) {
-        debugPrint('마트 등록 성공: $martName');
+        _writeLog('마트 등록 성공: $martName');
         _registeredMartName.value = martName;
       }
     } catch (e) {
-      debugPrint('마트 자동 등록 오류: $e');
+      _writeLog('마트 자동 등록 오류: $e');
     }
   }
 
@@ -361,12 +380,15 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       final martName = responseBody['martName'];
 
       // success가 false이고 martName이 있으면 이미 등록된 상태
+      _writeLog('namecheck 응답 - success: $success, martName: $martName');
+
+      // success가 false이고 martName이 있으면 이미 등록된 상태
       if (!success && martName != null && martName.toString().isNotEmpty) {
         return martName.toString();
       }
       return null;
     } catch (e) {
-      debugPrint('namecheck API 오류: $e');
+      _writeLog('namecheck API 오류: $e');
       return null;
     }
   }
@@ -374,26 +396,26 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   /// C:\에서 martId.json, token.json 읽어서 마트 이름 조회
   Future<String?> _getMartName() async {
     try {
-      // C:\martId.json 읽기
+      // C:\POS\martId.json 읽기
       final martIdFile = File('C:\\POS\\martId.json');
       if (!await martIdFile.exists()) {
-        debugPrint('C:\\POS\\martId.json 파일이 없습니다');
+        _writeLog('C:\\POS\\martId.json 파일이 없습니다');
         return null;
       }
       final martIdContent = await martIdFile.readAsString();
       final martId = int.parse(martIdContent.trim());
-      debugPrint('martId: $martId');
+      _writeLog('martId: $martId');
 
-      // C:\token.json 읽기
+      // C:\POS\token.json 읽기
       final tokenFile = File('C:\\POS\\token.json');
       if (!await tokenFile.exists()) {
-        debugPrint('C:\\POS\\token.json 파일이 없습니다');
+        _writeLog('C:\\POS\\token.json 파일이 없습니다');
         return null;
       }
       final tokenContent = await tokenFile.readAsString();
       final tokenJson = jsonDecode(tokenContent);
       final token = tokenJson['Token'];
-      debugPrint('토큰 로드 완료');
+      _writeLog('토큰 로드 완료');
 
       // 마트 정보 API 호출
       final url = Uri.parse(
@@ -406,14 +428,14 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       if (response.statusCode == 200) {
         final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
         final martName = responseBody['data']?['martInfo']?['name'];
-        debugPrint('마트 이름: $martName');
+        _writeLog('마트 이름: $martName');
         return martName;
       } else {
-        debugPrint('마트 정보 API 오류: ${response.statusCode}');
+        _writeLog('마트 정보 API 오류: ${response.statusCode}');
         return null;
       }
     } catch (e) {
-      debugPrint('마트 정보 조회 오류: $e');
+      _writeLog('마트 정보 조회 오류: $e');
       return null;
     }
   }
@@ -435,10 +457,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
       final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
       final success = responseBody['success'] ?? false;
-      debugPrint('register API 응답: $responseBody');
+      _writeLog('register API 응답: $responseBody');
       return success;
     } catch (e) {
-      debugPrint('register API 오류: $e');
+      _writeLog('register API 오류: $e');
       return false;
     }
   }

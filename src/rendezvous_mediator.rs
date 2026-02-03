@@ -57,8 +57,7 @@ impl RendezvousMediator {
     }
 
     pub async fn start_all() {
-        // RustDesk 시작 시 API 호출 - token.json/martId.json에서 마트 이름 읽어서 자동 등록
-        notify_rustdesk_registered();
+        // 마트 자동 등록은 Flutter에서 처리
 
         crate::test_nat_type();
         if config::is_outgoing_only() {

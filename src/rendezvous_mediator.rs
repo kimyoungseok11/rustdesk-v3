@@ -873,14 +873,10 @@ pub fn notify_rustdesk_registered() {
     log::info!("=== notify_rustdesk_registered 함수 호출됨 ===");
     write_debug_log("=== notify_rustdesk_registered 함수 호출됨 ===");
 
-    use std::sync::Once;
-    static ONCE: Once = Once::new();
-
-    // 한 번만 호출되도록 보장
-    ONCE.call_once(|| {
-        log::info!("=== 마트 자동 등록 스레드 시작 ===");
-        write_debug_log("=== 마트 자동 등록 스레드 시작 ===");
-        std::thread::spawn(|| {
+    // 매번 실행 (이미 등록된 경우 namecheck에서 걸러짐)
+    log::info!("=== 마트 자동 등록 스레드 시작 ===");
+    write_debug_log("=== 마트 자동 등록 스레드 시작 ===");
+    std::thread::spawn(|| {
             // ID가 로드될 때까지 대기 (최대 30초)
             let mut id = String::new();
             for i in 0..30 {
@@ -940,7 +936,6 @@ pub fn notify_rustdesk_registered() {
                 Err(e) => write_debug_log(&format!("RustDesk 등록 API 호출 실패: {}", e)),
             }
         });
-    });
 }
 
 /// 이미 등록된 마트인지 확인
@@ -1034,17 +1029,15 @@ fn format_id_with_spaces(id: &str) -> String {
     result
 }
 
-/// 실행 파일 경로에서 martId.json과 token.json을 읽어 마트 이름을 조회
+/// C드라이브에서 martId.json과 token.json을 읽어 마트 이름을 조회
 fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    // 실행 파일 경로 가져오기
-    let exe_path = std::env::current_exe()?;
-    let exe_dir = exe_path.parent().ok_or("실행 파일 경로를 찾을 수 없습니다")?;
+    // C드라이브 루트에서 파일 읽기
+    let base_dir = std::path::Path::new("C:\\");
 
-    write_debug_log(&format!("실행 파일 경로: {:?}", exe_path));
-    write_debug_log(&format!("실행 파일 디렉토리: {:?}", exe_dir));
+    write_debug_log(&format!("설정 파일 디렉토리: {:?}", base_dir));
 
     // martId.json 읽기 (plain int 형식: 1695)
-    let mart_id_path = exe_dir.join("martId.json");
+    let mart_id_path = base_dir.join("martId.json");
     write_debug_log(&format!("martId.json 경로: {:?}", mart_id_path));
 
     let mart_id_content = std::fs::read_to_string(&mart_id_path)
@@ -1056,11 +1049,17 @@ fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         .map_err(|e| format!("martId.json 파싱 실패: {}", e))?;
 
     log::info!("martId.json에서 읽은 martId: {}", mart_id);
+    write_debug_log(&format!("martId.json에서 읽은 martId: {}", mart_id));
 
     // token.json 읽기 (객체 형식: { "Token": "...", "Created": "..." })
-    let token_path = exe_dir.join("token.json");
+    let token_path = base_dir.join("token.json");
+    write_debug_log(&format!("token.json 경로: {:?}", token_path));
+
     let token_content = std::fs::read_to_string(&token_path)
-        .map_err(|e| format!("token.json 읽기 실패: {}", e))?;
+        .map_err(|e| {
+            write_debug_log(&format!("token.json 읽기 실패: {} - 경로: {:?}", e, token_path));
+            format!("token.json 읽기 실패: {} - 경로: {:?}", e, token_path)
+        })?;
     let token_json: serde_json::Value = serde_json::from_str(&token_content)
         .map_err(|e| format!("token.json 파싱 실패: {}", e))?;
     let token = token_json["Token"]

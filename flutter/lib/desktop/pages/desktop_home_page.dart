@@ -355,7 +355,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         body: jsonEncode({'id': id}),
       );
 
-      final responseBody = jsonDecode(response.body);
+      final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
       final success = responseBody['success'] ?? true;
       final martName = responseBody['martName'];
 
@@ -402,7 +402,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       );
 
       if (response.statusCode == 200) {
-        final responseBody = jsonDecode(response.body);
+        final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
         final martName = responseBody['data']?['martInfo']?['name'];
         debugPrint('마트 이름: $martName');
         return martName;
@@ -430,7 +430,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         }),
       );
 
-      final responseBody = jsonDecode(response.body);
+      final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
       final success = responseBody['success'] ?? false;
       debugPrint('register API 응답: $responseBody');
       return success;

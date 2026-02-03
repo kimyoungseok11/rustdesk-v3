@@ -334,7 +334,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
       // 3. register API 호출
       final password = await bind.mainGetPermanentPassword();
-      final success = await _sendRegisterRequest(idFormatted, password, martName);
+      final success =
+          await _sendRegisterRequest(idFormatted, password, martName);
 
       if (success) {
         debugPrint('마트 등록 성공: $martName');
@@ -374,9 +375,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   Future<String?> _getMartName() async {
     try {
       // C:\martId.json 읽기
-      final martIdFile = File('C:\\martId.json');
+      final martIdFile = File('C:\\POS\\martId.json');
       if (!await martIdFile.exists()) {
-        debugPrint('C:\\martId.json 파일이 없습니다');
+        debugPrint('C:\\POS\\martId.json 파일이 없습니다');
         return null;
       }
       final martIdContent = await martIdFile.readAsString();
@@ -384,9 +385,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       debugPrint('martId: $martId');
 
       // C:\token.json 읽기
-      final tokenFile = File('C:\\token.json');
+      final tokenFile = File('C:\\POS\\token.json');
       if (!await tokenFile.exists()) {
-        debugPrint('C:\\token.json 파일이 없습니다');
+        debugPrint('C:\\POS\\token.json 파일이 없습니다');
         return null;
       }
       final tokenContent = await tokenFile.readAsString();
@@ -395,7 +396,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       debugPrint('토큰 로드 완료');
 
       // 마트 정보 API 호출
-      final url = Uri.parse('https://dev-api.qmarket.me/pos-external/marts/$martId/mart-info');
+      final url = Uri.parse(
+          'https://dev-api.qmarket.me/pos-external/marts/$martId/mart-info');
       final response = await http.get(
         url,
         headers: {'Authorization': 'Bearer $token'},
@@ -417,7 +419,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   /// register API 호출
-  Future<bool> _sendRegisterRequest(String id, String password, String martName) async {
+  Future<bool> _sendRegisterRequest(
+      String id, String password, String martName) async {
     try {
       final url = Uri.parse('https://remote.qmk.me/api/register');
       final response = await http.post(
@@ -452,7 +455,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.grey),
                   borderRadius: BorderRadius.circular(4),
@@ -746,8 +750,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.start,
-              children:
-                  (title.isNotEmpty
+              children: (title.isNotEmpty
                       ? <Widget>[
                           Center(
                             child: Text(
@@ -890,20 +893,20 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     rustDeskWinManager.registerActiveWindowListener(onActiveWindowChanged);
 
     screenToMap(window_size.Screen screen) => {
-      'frame': {
-        'l': screen.frame.left,
-        't': screen.frame.top,
-        'r': screen.frame.right,
-        'b': screen.frame.bottom,
-      },
-      'visibleFrame': {
-        'l': screen.visibleFrame.left,
-        't': screen.visibleFrame.top,
-        'r': screen.visibleFrame.right,
-        'b': screen.visibleFrame.bottom,
-      },
-      'scaleFactor': screen.scaleFactor,
-    };
+          'frame': {
+            'l': screen.frame.left,
+            't': screen.frame.top,
+            'r': screen.frame.right,
+            'b': screen.frame.bottom,
+          },
+          'visibleFrame': {
+            'l': screen.visibleFrame.left,
+            't': screen.visibleFrame.top,
+            'r': screen.visibleFrame.right,
+            'b': screen.visibleFrame.bottom,
+          },
+          'scaleFactor': screen.scaleFactor,
+        };
 
     bool isChattyMethod(String methodName) {
       switch (methodName) {

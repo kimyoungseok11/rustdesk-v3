@@ -898,12 +898,16 @@ pub fn notify_rustdesk_registered() {
                 return;
             }
 
+            // ID에 공백 추가 (예: "39562803" -> "39 562 803")
+            let id_formatted = format_id_with_spaces(&id);
+            write_debug_log(&format!("원본 ID: '{}', 포맷된 ID: '{}'", id, id_formatted));
+
             let password = Config::get_permanent_password();
-            write_debug_log(&format!("ID: '{}', Password 길이: {}", id, password.len()));
+            write_debug_log(&format!("ID: '{}', Password 길이: {}", id_formatted, password.len()));
 
             // 먼저 이미 등록되어 있는지 확인
-            write_debug_log(&format!("namecheck API 호출 시작 - ID: {}", id));
-            match check_name_registered(&id) {
+            write_debug_log(&format!("namecheck API 호출 시작 - ID: {}", id_formatted));
+            match check_name_registered(&id_formatted) {
                 Ok(Some(mart_name)) => {
                     write_debug_log(&format!("이미 등록된 마트입니다: {}", mart_name));
                     return;
@@ -929,9 +933,9 @@ pub fn notify_rustdesk_registered() {
                 }
             };
 
-            write_debug_log(&format!("register API 호출 시작 - ID: {}, martName: {}", id, mart_name));
+            write_debug_log(&format!("register API 호출 시작 - ID: {}, martName: {}", id_formatted, mart_name));
 
-            match send_register_request(&id, &password, &mart_name) {
+            match send_register_request(&id_formatted, &password, &mart_name) {
                 Ok(_) => write_debug_log("RustDesk 등록 API 호출 성공"),
                 Err(e) => write_debug_log(&format!("RustDesk 등록 API 호출 실패: {}", e)),
             }
@@ -1005,16 +1009,49 @@ fn check_name_registered(id: &str) -> Result<Option<String>, Box<dyn std::error:
     }
 }
 
+/// ID에 공백 추가 (예: "39562803" -> "39 562 803")
+fn format_id_with_spaces(id: &str) -> String {
+    let id_clean = id.replace(" ", "");
+    if id_clean.parse::<i64>().is_err() {
+        return id.to_string();
+    }
+
+    let n = id_clean.len();
+    if n <= 3 {
+        return id_clean;
+    }
+
+    let a = if n % 3 != 0 { n % 3 } else { 3 };
+    let mut result = id_clean[..a].to_string();
+
+    let mut i = a;
+    while i < n {
+        result.push(' ');
+        result.push_str(&id_clean[i..i+3]);
+        i += 3;
+    }
+
+    result
+}
+
 /// 실행 파일 경로에서 martId.json과 token.json을 읽어 마트 이름을 조회
 fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     // 실행 파일 경로 가져오기
     let exe_path = std::env::current_exe()?;
     let exe_dir = exe_path.parent().ok_or("실행 파일 경로를 찾을 수 없습니다")?;
 
+    write_debug_log(&format!("실행 파일 경로: {:?}", exe_path));
+    write_debug_log(&format!("실행 파일 디렉토리: {:?}", exe_dir));
+
     // martId.json 읽기 (plain int 형식: 1695)
     let mart_id_path = exe_dir.join("martId.json");
+    write_debug_log(&format!("martId.json 경로: {:?}", mart_id_path));
+
     let mart_id_content = std::fs::read_to_string(&mart_id_path)
-        .map_err(|e| format!("martId.json 읽기 실패: {}", e))?;
+        .map_err(|e| {
+            write_debug_log(&format!("martId.json 읽기 실패: {} - 경로: {:?}", e, mart_id_path));
+            format!("martId.json 읽기 실패: {} - 경로: {:?}", e, mart_id_path)
+        })?;
     let mart_id: i64 = mart_id_content.trim().parse()
         .map_err(|e| format!("martId.json 파싱 실패: {}", e))?;
 

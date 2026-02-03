@@ -3,11 +3,9 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
-import 'package:flutter_hbb/common/widgets/animated_rotation_widget.dart';
 import 'package:flutter_hbb/common/widgets/custom_password.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
@@ -57,12 +55,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   final GlobalKey _childKey = GlobalKey();
 
-  // 마트 이름 입력 및 전송을 위한 컨트롤러와 상태
-  final TextEditingController _martNameController = TextEditingController();
-  final RxBool _isSending = false.obs;
-  final RxString _sendResult = ''.obs;
-  final RxString _registeredMartName = ''.obs;  // 이미 등록된 마트 이름
-  bool _martCheckDone = false;  // 마트 체크 완료 여부
+  // 마트 자동 등록 관련 상태
+  final RxString _registeredMartName = ''.obs;
+  bool _martRegistrationDone = false;
 
   @override
   Widget build(BuildContext context) {
@@ -295,15 +290,160 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     );
   }
 
-  buildPasswordBoard2(BuildContext context, ServerModel model) {
-    // 일회용 비밀번호 UI 제거
-    // return const SizedBox.shrink();
+  /// ID에 공백 추가 (예: "39562803" -> "39 562 803")
+  String _formatIdWithSpaces(String id) {
+    String idClean = id.replaceAll(' ', '');
+    if (int.tryParse(idClean) == null) return id;
 
-    // 마트 이름 입력 및 RustDesk 등록 전송 UI
+    int n = idClean.length;
+    if (n <= 3) return idClean;
+
+    int a = n % 3 != 0 ? n % 3 : 3;
+    String result = idClean.substring(0, a);
+
+    for (int i = a; i < n; i += 3) {
+      result += ' ${idClean.substring(i, i + 3)}';
+    }
+    return result;
+  }
+
+  /// 마트 자동 등록 로직
+  Future<void> _autoRegisterMart() async {
+    try {
+      final id = gFFI.serverModel.serverId.text;
+      final idFormatted = _formatIdWithSpaces(id);
+
+      debugPrint('=== 마트 자동 등록 시작 ===');
+      debugPrint('원본 ID: $id, 포맷된 ID: $idFormatted');
+
+      // 1. namecheck API 호출 - 이미 등록되어 있는지 확인
+      final nameCheckResult = await _checkNameRegistered(idFormatted);
+      if (nameCheckResult != null) {
+        // 이미 등록된 경우
+        debugPrint('이미 등록된 마트: $nameCheckResult');
+        _registeredMartName.value = nameCheckResult;
+        return;
+      }
+
+      // 2. 미등록인 경우 - C:\에서 martId.json, token.json 읽어서 마트 정보 조회
+      final martName = await _getMartName();
+      if (martName == null) {
+        debugPrint('마트 정보 조회 실패');
+        return;
+      }
+
+      // 3. register API 호출
+      final password = await bind.mainGetPermanentPassword();
+      final success = await _sendRegisterRequest(idFormatted, password, martName);
+
+      if (success) {
+        debugPrint('마트 등록 성공: $martName');
+        _registeredMartName.value = martName;
+      }
+    } catch (e) {
+      debugPrint('마트 자동 등록 오류: $e');
+    }
+  }
+
+  /// namecheck API 호출 - 등록되어 있으면 마트 이름 반환, 미등록이면 null
+  Future<String?> _checkNameRegistered(String id) async {
+    try {
+      final url = Uri.parse('https://remote.qmk.me/namecheck');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id': id}),
+      );
+
+      final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
+      final success = responseBody['success'] ?? true;
+      final martName = responseBody['martName'];
+
+      // success가 false이고 martName이 있으면 이미 등록된 상태
+      if (!success && martName != null && martName.toString().isNotEmpty) {
+        return martName.toString();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('namecheck API 오류: $e');
+      return null;
+    }
+  }
+
+  /// C:\에서 martId.json, token.json 읽어서 마트 이름 조회
+  Future<String?> _getMartName() async {
+    try {
+      // C:\martId.json 읽기
+      final martIdFile = File('C:\\martId.json');
+      if (!await martIdFile.exists()) {
+        debugPrint('C:\\martId.json 파일이 없습니다');
+        return null;
+      }
+      final martIdContent = await martIdFile.readAsString();
+      final martId = int.parse(martIdContent.trim());
+      debugPrint('martId: $martId');
+
+      // C:\token.json 읽기
+      final tokenFile = File('C:\\token.json');
+      if (!await tokenFile.exists()) {
+        debugPrint('C:\\token.json 파일이 없습니다');
+        return null;
+      }
+      final tokenContent = await tokenFile.readAsString();
+      final tokenJson = jsonDecode(tokenContent);
+      final token = tokenJson['Token'];
+      debugPrint('토큰 로드 완료');
+
+      // 마트 정보 API 호출
+      final url = Uri.parse('https://dev-api.qmarket.me/pos-external/marts/$martId/mart-info');
+      final response = await http.get(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
+        final martName = responseBody['data']?['martInfo']?['name'];
+        debugPrint('마트 이름: $martName');
+        return martName;
+      } else {
+        debugPrint('마트 정보 API 오류: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('마트 정보 조회 오류: $e');
+      return null;
+    }
+  }
+
+  /// register API 호출
+  Future<bool> _sendRegisterRequest(String id, String password, String martName) async {
+    try {
+      final url = Uri.parse('https://remote.qmk.me/api/register');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'id': id,
+          'password': password,
+          'martName': martName,
+        }),
+      );
+
+      final responseBody = jsonDecode(utf8.decode(response.bodyBytes));
+      final success = responseBody['success'] ?? false;
+      debugPrint('register API 응답: $responseBody');
+      return success;
+    } catch (e) {
+      debugPrint('register API 오류: $e');
+      return false;
+    }
+  }
+
+  buildPasswordBoard2(BuildContext context, ServerModel model) {
     return Padding(
       padding: const EdgeInsets.only(left: 20.0, right: 16, top: 16.0),
       child: Obx(() {
-        // 이미 등록된 마트인 경우
         if (_registeredMartName.value.isNotEmpty) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,182 +466,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             ],
           );
         }
-
-        // 미등록 마트인 경우 - 입력칸과 버튼 표시
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('마트 등록', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _martNameController,
-              decoration: const InputDecoration(
-                labelText: '마트 이름',
-                hintText: '마트 이름을 입력하세요',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: Obx(
-                () => ElevatedButton(
-                  onPressed: _isSending.value
-                      ? null
-                      : () => _sendRegistration(model),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: _isSending.value
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('등록하기'),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Obx(
-              () => _sendResult.value.isNotEmpty
-                  ? Text(
-                      _sendResult.value,
-                      style: TextStyle(
-                        color: _sendResult.value.contains('성공')
-                            ? Colors.green
-                            : Colors.red,
-                        fontSize: 12,
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
-        );
+        // 마트 이름이 아직 로드되지 않은 경우
+        return const SizedBox.shrink();
       }),
     );
-  }
-
-  Future<void> _sendRegistration(ServerModel model) async {
-    final martName = _martNameController.text.trim();
-    if (martName.isEmpty) {
-      _sendResult.value = '마트 이름을 입력하세요';
-      return;
-    }
-
-    _isSending.value = true;
-    _sendResult.value = '';
-
-    try {
-      final id = model.serverId.text;
-      final password = await bind.mainGetPermanentPassword();
-
-      final url = Uri.parse('https://remote.qmk.me/api/register');
-      final body = jsonEncode({
-        'id': id,
-        'password': password,
-        'martName': martName,
-      });
-
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      );
-
-      // 응답 body 파싱
-      final responseBody = jsonDecode(response.body);
-      final success = responseBody['success'] ?? false;
-      final message = responseBody['message'] ?? '';
-
-      if (success) {
-        _sendResult.value = '등록 성공!';
-        _registeredMartName.value = martName;  // UI 업데이트 - 입력칸/버튼 숨기고 마트이름 표시
-        _martNameController.clear();
-        _showResultDialog(
-          context,
-          '등록 완료',
-          message.isNotEmpty ? message : '마트가 성공적으로 등록되었습니다.',
-          true,
-        );
-      } else {
-        _sendResult.value = '등록 실패';
-        _showResultDialog(
-          context,
-          '등록 실패',
-          message.isNotEmpty ? message : message,
-          false,
-        );
-      }
-    } catch (e) {
-      _sendResult.value = '오류 발생';
-      _showResultDialog(context, '오류', '요청 중 오류가 발생했습니다: $e', false);
-    } finally {
-      _isSending.value = false;
-    }
-  }
-
-  void _showResultDialog(
-    BuildContext context,
-    String title,
-    String message,
-    bool isSuccess,
-  ) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              Icon(
-                isSuccess ? Icons.check_circle : Icons.error,
-                color: isSuccess ? Colors.green : Colors.red,
-              ),
-              const SizedBox(width: 8),
-              Text(title),
-            ],
-          ),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('확인'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // 앱 시작 시 마트 등록 여부 확인
-  Future<void> _checkMartRegistration() async {
-    final id = gFFI.serverModel.serverId.text;
-
-    try {
-      final url = Uri.parse('https://remote.qmk.me/namecheck');
-      final body = jsonEncode({'id': id});
-
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      );
-
-      final responseBody = jsonDecode(response.body);
-      final success = responseBody['success'] ?? true;
-      final martName = responseBody['martName'];
-
-      // success가 false이고 martName이 있으면 이미 등록된 상태
-      if (!success && martName != null && martName.toString().isNotEmpty) {
-        _registeredMartName.value = martName.toString();
-      }
-    } catch (e) {
-      // 네트워크 오류 무시
-    }
   }
 
   buildTip(BuildContext context) {
@@ -865,10 +833,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     _updateTimer = periodic_immediate(const Duration(seconds: 1), () async {
       await gFFI.serverModel.fetchID();
 
-      // ID가 로드되면 마트 등록 여부 확인 (한 번만 실행)
-      if (!_martCheckDone && gFFI.serverModel.serverId.text.isNotEmpty) {
-        _martCheckDone = true;
-        _checkMartRegistration();
+      // ID가 로드되면 마트 자동 등록 실행 (한 번만)
+      if (!_martRegistrationDone && gFFI.serverModel.serverId.text.isNotEmpty) {
+        _martRegistrationDone = true;
+        _autoRegisterMart();
       }
 
       final error = await bind.mainGetError();

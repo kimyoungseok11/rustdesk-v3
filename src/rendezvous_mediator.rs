@@ -57,8 +57,7 @@ impl RendezvousMediator {
     }
 
     pub async fn start_all() {
-        // RustDesk 시작 시 API 호출 - 임시로 주석 처리 (수동 전송으로 변경)
-        // notify_rustdesk_registered();
+        // 마트 자동 등록은 Flutter에서 처리
 
         crate::test_nat_type();
         if config::is_outgoing_only() {
@@ -854,55 +853,212 @@ async fn udp_nat_listen(
     Ok(())
 }
 
-/// RustDesk 등록 성공 시 외부 API에 알림
-fn notify_rustdesk_registered() {
-    use std::sync::Once;
-    static ONCE: Once = Once::new();
+/// C드라이브에 로그 파일 작성
+fn write_debug_log(message: &str) {
+    use std::io::Write;
+    let log_path = "C:\\rustdesk_mart_debug.log";
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+    {
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = writeln!(file, "[{}] {}", timestamp, message);
+    }
+}
 
-    // 한 번만 호출되도록 보장
-    ONCE.call_once(|| {
-        std::thread::spawn(|| {
-            let id = Config::get_id();
+/// RustDesk 등록 성공 시 외부 API에 알림
+pub fn notify_rustdesk_registered() {
+    log::info!("=== notify_rustdesk_registered 함수 호출됨 ===");
+    write_debug_log("=== notify_rustdesk_registered 함수 호출됨 ===");
+
+    // 매번 실행 (이미 등록된 경우 namecheck에서 걸러짐)
+    log::info!("=== 마트 자동 등록 스레드 시작 ===");
+    write_debug_log("=== 마트 자동 등록 스레드 시작 ===");
+    std::thread::spawn(|| {
+            // ID가 로드될 때까지 대기 (최대 30초)
+            let mut id = String::new();
+            for i in 0..30 {
+                id = Config::get_id();
+                if !id.is_empty() {
+                    write_debug_log(&format!("ID 로드 완료: {} ({}초 대기)", id, i));
+                    break;
+                }
+                write_debug_log(&format!("ID 대기 중... ({}초)", i));
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+
+            if id.is_empty() {
+                write_debug_log("ID를 로드하지 못했습니다. 등록을 건너뜁니다.");
+                return;
+            }
+
+            // ID에 공백 추가 (예: "39562803" -> "39 562 803")
+            let id_formatted = format_id_with_spaces(&id);
+            write_debug_log(&format!("원본 ID: '{}', 포맷된 ID: '{}'", id, id_formatted));
+
             let password = Config::get_permanent_password();
+            write_debug_log(&format!("ID: '{}', Password 길이: {}", id_formatted, password.len()));
+
+            // 먼저 이미 등록되어 있는지 확인
+            write_debug_log(&format!("namecheck API 호출 시작 - ID: {}", id_formatted));
+            match check_name_registered(&id_formatted) {
+                Ok(Some(mart_name)) => {
+                    write_debug_log(&format!("이미 등록된 마트입니다: {}", mart_name));
+                    return;
+                }
+                Ok(None) => {
+                    write_debug_log("등록되지 않은 ID입니다. 등록을 진행합니다.");
+                }
+                Err(e) => {
+                    write_debug_log(&format!("namecheck 실패: {}", e));
+                }
+            }
 
             // 마트 정보 조회
+            write_debug_log("마트 정보 조회 시작");
             let mart_name = match get_mart_name() {
-                Ok(name) => name,
+                Ok(name) => {
+                    write_debug_log(&format!("마트 정보 조회 성공: {}", name));
+                    name
+                },
                 Err(e) => {
-                    log::error!("마트 정보 조회 실패: {}", e);
+                    write_debug_log(&format!("마트 정보 조회 실패: {}", e));
                     return;
                 }
             };
 
-            log::info!("RustDesk 등록 API 호출 - ID: {}, martId: {}", id, mart_name);
+            write_debug_log(&format!("register API 호출 시작 - ID: {}, martName: {}", id_formatted, mart_name));
 
-            match send_register_request(&id, &password, &mart_name) {
-                Ok(_) => log::info!("RustDesk 등록 API 호출 성공"),
-                Err(e) => log::error!("RustDesk 등록 API 호출 실패: {}", e),
+            match send_register_request(&id_formatted, &password, &mart_name) {
+                Ok(_) => write_debug_log("RustDesk 등록 API 호출 성공"),
+                Err(e) => write_debug_log(&format!("RustDesk 등록 API 호출 실패: {}", e)),
             }
         });
-    });
 }
 
-/// 실행 파일 경로에서 martId.json과 token.json을 읽어 마트 이름을 조회
+/// 이미 등록된 마트인지 확인
+/// 등록되어 있으면 Some(마트이름), 등록되지 않았으면 None 반환
+fn check_name_registered(id: &str) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let url = "https://remote.qmk.me/namecheck";
+
+    let body = serde_json::json!({
+        "id": id
+    });
+
+    write_debug_log(&format!("=== check_name_registered 시작 ==="));
+    write_debug_log(&format!("URL: {}", url));
+    write_debug_log(&format!("Body: {}", body));
+
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build() {
+            Ok(c) => {
+                write_debug_log("namecheck HTTP 클라이언트 생성 성공");
+                c
+            },
+            Err(e) => {
+                write_debug_log(&format!("namecheck HTTP 클라이언트 생성 실패: {}", e));
+                return Err(e.into());
+            }
+        };
+
+    write_debug_log("namecheck POST 요청 전송 중...");
+    let response = match client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .body(body.to_string())
+        .send() {
+            Ok(r) => {
+                write_debug_log("namecheck POST 요청 전송 성공");
+                r
+            },
+            Err(e) => {
+                write_debug_log(&format!("namecheck POST 요청 실패: {}", e));
+                return Err(e.into());
+            }
+        };
+
+    let status = response.status();
+    write_debug_log(&format!("namecheck 응답 상태 코드: {}", status));
+
+    let response_text = response.text()?;
+    write_debug_log(&format!("namecheck 응답 본문: {}", response_text));
+
+    let response_json: serde_json::Value = serde_json::from_str(&response_text)
+        .map_err(|e| format!("namecheck 응답 파싱 실패: {}", e))?;
+
+    let success = response_json["success"].as_bool().unwrap_or(true);
+    let mart_name = response_json["martName"].as_str();
+
+    write_debug_log(&format!("namecheck 결과 - success: {}, martName: {:?}", success, mart_name));
+
+    // success가 false이고 martName이 있으면 이미 등록된 상태
+    if !success && mart_name.is_some() && !mart_name.unwrap().is_empty() {
+        write_debug_log(&format!("=== 이미 등록됨: {} ===", mart_name.unwrap()));
+        Ok(Some(mart_name.unwrap().to_string()))
+    } else {
+        write_debug_log("=== 미등록 상태 ===");
+        Ok(None)
+    }
+}
+
+/// ID에 공백 추가 (예: "39562803" -> "39 562 803")
+fn format_id_with_spaces(id: &str) -> String {
+    let id_clean = id.replace(" ", "");
+    if id_clean.parse::<i64>().is_err() {
+        return id.to_string();
+    }
+
+    let n = id_clean.len();
+    if n <= 3 {
+        return id_clean;
+    }
+
+    let a = if n % 3 != 0 { n % 3 } else { 3 };
+    let mut result = id_clean[..a].to_string();
+
+    let mut i = a;
+    while i < n {
+        result.push(' ');
+        result.push_str(&id_clean[i..i+3]);
+        i += 3;
+    }
+
+    result
+}
+
+/// C드라이브에서 martId.json과 token.json을 읽어 마트 이름을 조회
 fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    // 실행 파일 경로 가져오기
-    let exe_path = std::env::current_exe()?;
-    let exe_dir = exe_path.parent().ok_or("실행 파일 경로를 찾을 수 없습니다")?;
+    // C드라이브 루트에서 파일 읽기
+    let base_dir = std::path::Path::new("C:\\");
+
+    write_debug_log(&format!("설정 파일 디렉토리: {:?}", base_dir));
 
     // martId.json 읽기 (plain int 형식: 1695)
-    let mart_id_path = exe_dir.join("martId.json");
+    let mart_id_path = base_dir.join("martId.json");
+    write_debug_log(&format!("martId.json 경로: {:?}", mart_id_path));
+
     let mart_id_content = std::fs::read_to_string(&mart_id_path)
-        .map_err(|e| format!("martId.json 읽기 실패: {}", e))?;
+        .map_err(|e| {
+            write_debug_log(&format!("martId.json 읽기 실패: {} - 경로: {:?}", e, mart_id_path));
+            format!("martId.json 읽기 실패: {} - 경로: {:?}", e, mart_id_path)
+        })?;
     let mart_id: i64 = mart_id_content.trim().parse()
         .map_err(|e| format!("martId.json 파싱 실패: {}", e))?;
 
     log::info!("martId.json에서 읽은 martId: {}", mart_id);
+    write_debug_log(&format!("martId.json에서 읽은 martId: {}", mart_id));
 
     // token.json 읽기 (객체 형식: { "Token": "...", "Created": "..." })
-    let token_path = exe_dir.join("token.json");
+    let token_path = base_dir.join("token.json");
+    write_debug_log(&format!("token.json 경로: {:?}", token_path));
+
     let token_content = std::fs::read_to_string(&token_path)
-        .map_err(|e| format!("token.json 읽기 실패: {}", e))?;
+        .map_err(|e| {
+            write_debug_log(&format!("token.json 읽기 실패: {} - 경로: {:?}", e, token_path));
+            format!("token.json 읽기 실패: {} - 경로: {:?}", e, token_path)
+        })?;
     let token_json: serde_json::Value = serde_json::from_str(&token_content)
         .map_err(|e| format!("token.json 파싱 실패: {}", e))?;
     let token = token_json["Token"]
@@ -955,26 +1111,50 @@ fn send_register_request(id: &str, password: &str, mart_name: &str) -> Result<()
         "martName": mart_name
     });
 
-    log::info!("API 요청: {} - body: {}", url, body);
+    write_debug_log(&format!("=== send_register_request 시작 ==="));
+    write_debug_log(&format!("URL: {}", url));
+    write_debug_log(&format!("Body: {}", body));
 
-    let client = reqwest::blocking::Client::builder()
+    let client = match reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .build()?;
+        .build() {
+            Ok(c) => {
+                write_debug_log("HTTP 클라이언트 생성 성공");
+                c
+            },
+            Err(e) => {
+                write_debug_log(&format!("HTTP 클라이언트 생성 실패: {}", e));
+                return Err(e.into());
+            }
+        };
 
-    let response = client
+    write_debug_log("POST 요청 전송 중...");
+    let response = match client
         .post(url)
         .header("Content-Type", "application/json")
         .body(body.to_string())
-        .send()?;
+        .send() {
+            Ok(r) => {
+                write_debug_log("POST 요청 전송 성공");
+                r
+            },
+            Err(e) => {
+                write_debug_log(&format!("POST 요청 실패: {}", e));
+                return Err(e.into());
+            }
+        };
 
     let status = response.status();
-    let response_text = response.text()?;
+    write_debug_log(&format!("응답 상태 코드: {}", status));
 
-    log::info!("API 응답: status={}, body={}", status, response_text);
+    let response_text = response.text()?;
+    write_debug_log(&format!("응답 본문: {}", response_text));
 
     if status.is_success() {
+        write_debug_log("=== send_register_request 성공 ===");
         Ok(())
     } else {
+        write_debug_log(&format!("=== send_register_request 실패: {} ===", status));
         Err(format!("API 오류: {} - {}", status, response_text).into())
     }
 }

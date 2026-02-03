@@ -80,6 +80,7 @@ fn initialize(app_dir: &str, custom_client_config: &str) {
     {
         // core_main's init_log does not work for flutter since it is only applied to its load_library in main.c
         hbb_common::init_log(false, "flutter_ffi");
+        // 마트 자동 등록은 Flutter에서 처리
     }
 }
 

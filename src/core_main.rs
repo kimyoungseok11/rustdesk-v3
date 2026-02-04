@@ -341,6 +341,8 @@ pub fn core_main() -> Option<Vec<String>> {
             }
         } else if args[0] == "--tray" {
             if !crate::check_process("--tray", true) {
+                // 트레이 시작 시 마트 자동 등록 실행 (설치 직후 포함)
+                crate::rendezvous_mediator::notify_rustdesk_registered();
                 crate::tray::start_tray();
             }
             return None;

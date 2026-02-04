@@ -2912,15 +2912,10 @@ sc start {app_name}
     }
 }
 
-fn run_after_run_cmds(silent: bool) {
+fn run_after_run_cmds(_silent: bool) {
     let (_, _, _, exe) = get_install_info();
-    if !silent {
-        log::debug!("Spawn new window");
-        allow_err!(std::process::Command::new("cmd")
-            .args(&["/c", "timeout", "/t", "2", "&", &format!("{exe}")])
-            .creation_flags(winapi::um::winbase::CREATE_NO_WINDOW)
-            .spawn());
-    }
+    // 설치 직후에는 메인 UI 창을 띄우지 않음 (더블클릭 실행 시에만 UI 표시)
+    // 트레이 앱만 실행하여 백그라운드 서비스 유지
     if Config::get_option("stop-service") != "Y" {
         allow_err!(std::process::Command::new(&exe).arg("--tray").spawn());
     }

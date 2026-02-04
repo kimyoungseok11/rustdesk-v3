@@ -1031,7 +1031,7 @@ fn format_id_with_spaces(id: &str) -> String {
 /// C드라이브에서 martId.json과 token.json을 읽어 마트 이름을 조회
 fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     // C드라이브 루트에서 파일 읽기
-    let base_dir = std::path::Path::new("C:\\");
+    let base_dir = std::path::Path::new("C:\\POS\\");
 
     write_debug_log(&format!("설정 파일 디렉토리: {:?}", base_dir));
 

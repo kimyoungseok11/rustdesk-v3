@@ -853,14 +853,21 @@ async fn udp_nat_listen(
     Ok(())
 }
 
-/// C드라이브에 로그 파일 작성
+/// C:\POS\LOG에 로그 파일 작성
 fn write_debug_log(message: &str) {
     use std::io::Write;
-    let log_path = "C:\\rustdesk_mart_debug.log";
+    let log_dir = std::path::Path::new("C:\\POS\\LOG");
+    let log_path = log_dir.join("rustdesk_mart.log");
+
+    // 로그 디렉토리가 없으면 생성
+    if !log_dir.exists() {
+        let _ = std::fs::create_dir_all(log_dir);
+    }
+
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log_path)
+        .open(&log_path)
     {
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
         let _ = writeln!(file, "[{}] {}", timestamp, message);

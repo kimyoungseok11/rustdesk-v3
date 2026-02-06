@@ -1051,8 +1051,13 @@ fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
             write_debug_log(&format!("martId.json 읽기 실패: {} - 경로: {:?}", e, mart_id_path));
             format!("martId.json 읽기 실패: {} - 경로: {:?}", e, mart_id_path)
         })?;
-    let mart_id: i64 = mart_id_content.trim().parse()
-        .map_err(|e| format!("martId.json 파싱 실패: {}", e))?;
+    // 디버깅: 파일 내용의 바이트 출력
+    write_debug_log(&format!("martId.json 원본 바이트: {:?}", mart_id_content.as_bytes()));
+    // BOM(Byte Order Mark) 및 공백 제거 후 파싱
+    let mart_id_str = mart_id_content.trim().trim_start_matches('\u{feff}');
+    write_debug_log(&format!("martId.json 내용 (BOM 제거 후): '{}'", mart_id_str));
+    let mart_id: i64 = mart_id_str.parse()
+        .map_err(|e| format!("martId.json 파싱 실패: {} - 내용: '{}'", e, mart_id_str))?;
 
     log::info!("martId.json에서 읽은 martId: {}", mart_id);
     write_debug_log(&format!("martId.json에서 읽은 martId: {}", mart_id));

@@ -403,7 +403,12 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         return null;
       }
       final martIdContent = await martIdFile.readAsString();
-      final martId = int.parse(martIdContent.trim());
+      // 디버깅: 파일 내용의 바이트 출력
+      _writeLog('martId.json 원본 바이트: ${martIdContent.codeUnits}');
+      // BOM(Byte Order Mark) 및 공백 제거 후 파싱
+      final martIdStr = martIdContent.trim().replaceFirst('\uFEFF', '');
+      _writeLog('martId.json 내용 (BOM 제거 후): "$martIdStr"');
+      final martId = int.parse(martIdStr);
       _writeLog('martId: $martId');
 
       // C:\POS\token.json 읽기

@@ -1080,7 +1080,7 @@ fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     log::info!("token.json에서 JWT 토큰 읽기 완료");
 
     // 마트 정보 API 호출
-    let url = format!("https://dev-api.qmarket.me/pos-external/marts/{}/mart-info", mart_id);
+    let url = format!("https://api.qmarket.me/pos-external/marts/{}/mart-info", mart_id);
 
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(10))

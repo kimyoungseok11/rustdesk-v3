@@ -424,7 +424,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
       // 마트 정보 API 호출
       final url = Uri.parse(
-          'https://dev-api.qmarket.me/pos-external/marts/$martId/mart-info');
+          'https://api.qmarket.me/pos-external/marts/$martId/mart-info');
       final response = await http.get(
         url,
         headers: {'Authorization': 'Bearer $token'},

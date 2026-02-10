@@ -853,10 +853,13 @@ async fn udp_nat_listen(
     Ok(())
 }
 
-/// C:\POS\LOG에 로그 파일 작성
+/// 기본 경로 상수 (포스 v3 martId.json, token.json 경로)
+const BASE_PATH: &str = "C:\\pos_v3";
+
+/// 로그 파일 작성
 fn write_debug_log(message: &str) {
     use std::io::Write;
-    let log_dir = std::path::Path::new("C:\\POS\\LOG");
+    let log_dir = std::path::Path::new(BASE_PATH).join("LOG");
     let log_path = log_dir.join("rustdesk_mart.log");
 
     // 로그 디렉토리가 없으면 생성
@@ -1035,10 +1038,9 @@ fn format_id_with_spaces(id: &str) -> String {
     result
 }
 
-/// C드라이브에서 martId.json과 token.json을 읽어 마트 이름을 조회
+/// martId.json과 token.json을 읽어 마트 이름을 조회
 fn get_mart_name() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    // C드라이브 루트에서 파일 읽기
-    let base_dir = std::path::Path::new("C:\\POS\\");
+    let base_dir = std::path::Path::new(BASE_PATH);
 
     write_debug_log(&format!("설정 파일 디렉토리: {:?}", base_dir));
 

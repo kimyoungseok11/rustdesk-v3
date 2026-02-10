@@ -59,14 +59,18 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   final RxString _registeredMartName = ''.obs;
   bool _martRegistrationDone = false;
 
-  /// C:\POS\LOG에 로그 파일 작성
+  // 기본 경로 상수
+  // 포스 v3 martId.json, token.json 경로
+  static const String _basePath = 'C:\\pos_v3';
+
+  // 로그 파일 작성
   void _writeLog(String message) {
     try {
-      final logDir = Directory('C:\\POS\\LOG');
+      final logDir = Directory('$_basePath\\rustdesk_log');
       if (!logDir.existsSync()) {
         logDir.createSync(recursive: true);
       }
-      final logFile = File('C:\\POS\\LOG\\rustdesk_mart.log');
+      final logFile = File('$_basePath\\rustdesk_log\\rustdesk_mart.log');
       final timestamp = DateTime.now().toString();
       logFile.writeAsStringSync(
         '[$timestamp] $message\n',
@@ -396,20 +400,20 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   /// C:\에서 martId.json, token.json 읽어서 마트 이름 조회
   Future<String?> _getMartName() async {
     try {
-      // C:\POS\martId.json 읽기
-      final martIdFile = File('C:\\POS\\martId.json');
+      // martId.json 읽기
+      final martIdFile = File('$_basePath\\martId.json');
       if (!await martIdFile.exists()) {
-        _writeLog('C:\\POS\\martId.json 파일이 없습니다');
+        _writeLog('$_basePath\\martId.json 파일이 없습니다');
         return null;
       }
       final martIdContent = await martIdFile.readAsString();
       final martId = int.parse(martIdContent.trim());
       _writeLog('martId: $martId');
 
-      // C:\POS\token.json 읽기
-      final tokenFile = File('C:\\POS\\token.json');
+      // token.json 읽기
+      final tokenFile = File('$_basePath\\token.json');
       if (!await tokenFile.exists()) {
-        _writeLog('C:\\POS\\token.json 파일이 없습니다');
+        _writeLog('$_basePath\\token.json 파일이 없습니다');
         return null;
       }
       final tokenContent = await tokenFile.readAsString();
